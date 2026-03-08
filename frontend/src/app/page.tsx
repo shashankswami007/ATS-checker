@@ -224,6 +224,7 @@ export default function HomePage() {
               {/* Actions */}
               <ReportActions
                 suggestions={report.suggestions}
+                report={report}
                 reportRef={reportRef}
                 onReset={handleReset}
               />

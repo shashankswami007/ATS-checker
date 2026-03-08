@@ -3,14 +3,43 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 
+interface ReportData {
+  score: number;
+  breakdown: {
+    keywordMatch: number;
+    skillMatch: number;
+    experienceRelevance: number;
+    formatting: number;
+    structure: number;
+  };
+  keywords: {
+    matched: string[];
+    missing: string[];
+    recommended: string[];
+  };
+  skills: {
+    matched: string[];
+    missing: string[];
+    matchPercentage: number;
+  };
+  suggestions: {
+    type: string;
+    priority: string;
+    title: string;
+    description: string;
+  }[];
+}
+
 interface ReportActionsProps {
   suggestions: { title: string; description: string }[];
+  report?: ReportData;
   reportRef: React.RefObject<HTMLDivElement | null>;
   onReset: () => void;
 }
 
 export default function ReportActions({
   suggestions,
+  report,
   reportRef,
   onReset,
 }: ReportActionsProps) {
@@ -34,43 +63,158 @@ export default function ReportActions({
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const html2canvas = (await import("html2canvas")).default;
       const jsPDF = (await import("jspdf")).default;
-
-      if (!reportRef.current) return;
-
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#f8fafc",
-      });
-
-      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
+      let y = 20;
 
-      const imgWidth = pageWidth - 20;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let yPosition = 10;
-      let remainingHeight = imgHeight;
-
-      // First page
-      pdf.addImage(imgData, "PNG", 10, yPosition, imgWidth, imgHeight);
-
-      // Handle multi-page reports
-      if (imgHeight > pageHeight - 20) {
-        let currentPage = 1;
-        remainingHeight -= pageHeight - 20;
-
-        while (remainingHeight > 0) {
-          pdf.addPage();
-          currentPage++;
-          const offsetY = -(pageHeight - 20) * (currentPage - 1) + 10;
-          pdf.addImage(imgData, "PNG", 10, offsetY, imgWidth, imgHeight);
-          remainingHeight -= pageHeight - 20;
+      const addText = (
+        text: string,
+        x: number,
+        fontSize: number,
+        style: "normal" | "bold" = "normal",
+        color: [number, number, number] = [30, 30, 30],
+      ) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont("helvetica", style);
+        pdf.setTextColor(...color);
+        const lines = pdf.splitTextToSize(text, pageWidth - x - 15);
+        const lineHeight = fontSize * 0.5;
+        for (const line of lines) {
+          if (y > 275) {
+            pdf.addPage();
+            y = 20;
+          }
+          pdf.text(line, x, y);
+          y += lineHeight;
         }
+      };
+
+      const addSpacer = (height: number) => {
+        y += height;
+      };
+
+      // Title
+      addText("ATS Resume Report", 15, 22, "bold", [79, 70, 229]);
+      addSpacer(4);
+      addText(
+        `Generated on ${new Date().toLocaleDateString()}`,
+        15,
+        9,
+        "normal",
+        [120, 120, 120],
+      );
+      addSpacer(8);
+
+      // Score
+      if (report) {
+        addText(`ATS Score: ${report.score}/100`, 15, 18, "bold", [30, 30, 30]);
+        addSpacer(6);
+
+        // Breakdown
+        addText("Score Breakdown", 15, 13, "bold", [79, 70, 229]);
+        addSpacer(2);
+        addText(`• Keyword Match: ${report.breakdown.keywordMatch}%`, 18, 10);
+        addText(`• Skill Match: ${report.breakdown.skillMatch}%`, 18, 10);
+        addText(
+          `• Experience Relevance: ${report.breakdown.experienceRelevance}%`,
+          18,
+          10,
+        );
+        addText(`• Formatting: ${report.breakdown.formatting}%`, 18, 10);
+        addText(`• Structure: ${report.breakdown.structure}%`, 18, 10);
+        addSpacer(6);
+
+        // Keywords
+        if (report.keywords.matched.length > 0) {
+          addText("Matched Keywords", 15, 13, "bold", [16, 185, 129]);
+          addSpacer(2);
+          addText(
+            report.keywords.matched.join(", "),
+            18,
+            9,
+            "normal",
+            [60, 60, 60],
+          );
+          addSpacer(4);
+        }
+
+        if (report.keywords.missing.length > 0) {
+          addText("Missing Keywords", 15, 13, "bold", [239, 68, 68]);
+          addSpacer(2);
+          addText(
+            report.keywords.missing.join(", "),
+            18,
+            9,
+            "normal",
+            [60, 60, 60],
+          );
+          addSpacer(4);
+        }
+
+        if (report.keywords.recommended.length > 0) {
+          addText(
+            "Recommended Keywords to Add",
+            15,
+            13,
+            "bold",
+            [245, 158, 11],
+          );
+          addSpacer(2);
+          addText(
+            report.keywords.recommended.join(", "),
+            18,
+            9,
+            "normal",
+            [60, 60, 60],
+          );
+          addSpacer(4);
+        }
+
+        // Skills
+        if (report.skills.matched.length > 0) {
+          addText(
+            `Matched Skills (${report.skills.matchPercentage}%)`,
+            15,
+            13,
+            "bold",
+            [16, 185, 129],
+          );
+          addSpacer(2);
+          addText(
+            report.skills.matched.join(", "),
+            18,
+            9,
+            "normal",
+            [60, 60, 60],
+          );
+          addSpacer(4);
+        }
+
+        if (report.skills.missing.length > 0) {
+          addText("Missing Skills", 15, 13, "bold", [239, 68, 68]);
+          addSpacer(2);
+          addText(
+            report.skills.missing.join(", "),
+            18,
+            9,
+            "normal",
+            [60, 60, 60],
+          );
+          addSpacer(6);
+        }
+      }
+
+      // Suggestions
+      if (suggestions.length > 0) {
+        addText("Improvement Suggestions", 15, 14, "bold", [79, 70, 229]);
+        addSpacer(3);
+
+        suggestions.forEach((s, i) => {
+          addText(`${i + 1}. ${s.title}`, 18, 11, "bold");
+          addText(s.description, 22, 9, "normal", [80, 80, 80]);
+          addSpacer(3);
+        });
       }
 
       pdf.save("ATS-Resume-Report.pdf");
@@ -80,6 +224,9 @@ export default function ReportActions({
       setDownloading(false);
     }
   };
+
+  // Keep reportRef for potential future use
+  void reportRef;
 
   return (
     <motion.div
