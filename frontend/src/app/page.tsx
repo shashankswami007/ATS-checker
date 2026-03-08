@@ -12,8 +12,9 @@ import SkillMatch from "./components/SkillMatch";
 import Suggestions from "./components/Suggestions";
 import CompatibilityChecks from "./components/CompatibilityChecks";
 import ReportActions from "./components/ReportActions";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+import { parseResume } from "@/lib/parseResume";
+import { analyzeTexts } from "@/lib/nlpEngine";
+import { calculateATSScore } from "@/lib/atsScorer";
 
 interface ATSReport {
   score: number;
@@ -73,22 +74,37 @@ export default function HomePage() {
     setReport(null);
 
     try {
-      const formData = new FormData();
-      formData.append("resume", resumeFile!);
-      formData.append("jobDescription", jobDescription);
+      // 1. Parse resume client-side
+      const resumeText = await parseResume(resumeFile!);
 
-      const res = await fetch(`${API_URL}/api/analyze`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Analysis failed");
+      if (!resumeText || resumeText.trim().length < 10) {
+        throw new Error(
+          "Could not extract text from the resume. Please try a different file.",
+        );
       }
 
-      setReport(data.report);
+      // 2. NLP analysis
+      const nlpResult = analyzeTexts(jobDescription, resumeText);
+
+      // 3. ATS scoring
+      const atsReport = calculateATSScore(nlpResult, resumeText);
+
+      // 4. Build report
+      setReport({
+        ...atsReport,
+        keywords: {
+          matched: nlpResult.matchedKeywords,
+          missing: nlpResult.missingKeywords,
+          recommended: nlpResult.recommendedKeywords,
+        },
+        skills: {
+          jd: nlpResult.jdSkills,
+          resume: nlpResult.resumeSkills,
+          matched: nlpResult.matchedSkills,
+          missing: nlpResult.missingSkills,
+          matchPercentage: Math.round(nlpResult.skillMatchRatio * 100),
+        },
+      });
 
       // Scroll to report
       setTimeout(() => {
