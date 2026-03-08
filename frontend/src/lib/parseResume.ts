@@ -30,16 +30,12 @@ export async function parseResume(file: File): Promise<string> {
 async function parsePDF(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
 
-  // Disable the web worker — runs on main thread instead.
-  // This avoids all CDN/worker fetch issues.
-  pdfjs.GlobalWorkerOptions.workerSrc = "";
+  // Use local worker file from public/ directory (no CDN dependency)
+  pdfjs.GlobalWorkerOptions.workerSrc = "/ATS-checker/pdf.worker.min.mjs";
 
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({
     data: arrayBuffer,
-    useWorkerFetch: false,
-    isEvalSupported: false,
-    useSystemFonts: true,
   }).promise;
   const pages: string[] = [];
 
